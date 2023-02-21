@@ -25,7 +25,7 @@ exports.ExposeStore = (moduleRaidStr) => {
     window.Store.MsgKey = window.mR.findModule((module) => module.default && module.default.fromString)[0].default;
     window.Store.MessageInfo = window.mR.findModule('sendQueryMsgInfo')[0];
     window.Store.OpaqueData = window.mR.findModule(module => module.default && module.default.createFromData)[0].default;
-    window.Store.QueryExist = window.mR.findModule('queryExists')[0] ? window.mR.findModule('queryExists')[0].queryExists : window.mR.findModule('queryExist')[0].queryWidExists;
+    window.Store.QueryExist = window.mR.findModule('queryWidExists')[0].queryExists;
     window.Store.QueryProduct = window.mR.findModule('queryProduct')[0];
     window.Store.QueryOrder = window.mR.findModule('queryOrder')[0];
     window.Store.SendClear = window.mR.findModule('sendClear')[0];
@@ -105,13 +105,12 @@ exports.ExposeStore = (moduleRaidStr) => {
     };
 
     // Function to modify functions.
-    // This function simply just runs the callback you provide with the original code in the first argument and all the arguments passed to that function.
     window.injectToFunction = (selector, callback) => {
         const oldFunct = window.mR.findModule(selector.name)[selector.index][selector.property];
         window.mR.findModule(selector.name)[selector.index][selector.property] = (...args) => callback(oldFunct, args);
     };
 
-    // Find Template models
+    // Find button models
     window.Store.TemplateButtonModel = window.findProxyModel('TemplateButtonModel');
     window.Store.TemplateButtonCollection = window.mR.findModule('TemplateButtonCollection')[0].TemplateButtonCollection;
     
@@ -212,40 +211,38 @@ exports.ExposeStore = (moduleRaidStr) => {
         return proto;
     });
 
-    setTimeout(() => {
-        window.injectToFunction({
-            index: 0,
-            name: 'createMsgProtobuf',
-            property: 'createMsgProtobuf'
-        }, (func, args) => {
-            const proto = func(...args);
-            if (proto.templateMessage) {
-                proto.viewOnceMessage = {
-                    message: {
-                        templateMessage: proto.templateMessage,
-                    },
-                };
-                delete proto.templateMessage;
-            }
-            if (proto.buttonsMessage) {
-                proto.viewOnceMessage = {
-                    message: {
-                        buttonsMessage: proto.buttonsMessage,
-                    },
-                };
-                delete proto.buttonsMessage;
-            }
-            if (proto.listMessage) {
-                proto.viewOnceMessage = {
-                    message: {
-                        listMessage: proto.listMessage,
-                    },
-                };
-                delete proto.listMessage;
-            }
-            return proto;
-        });
-    }, 100);
+    window.injectToFunction({
+        index: 0,
+        name: 'createMsgProtobuf',
+        property: 'createMsgProtobuf'
+    }, (func, args) => {
+        const proto = func(...args);
+        if (proto.templateMessage) {
+            proto.viewOnceMessage = {
+                message: {
+                    templateMessage: proto.templateMessage,
+                },
+            };
+            delete proto.templateMessage;
+        }
+        if (proto.buttonsMessage) {
+            proto.viewOnceMessage = {
+                message: {
+                    buttonsMessage: proto.buttonsMessage,
+                },
+            };
+            delete proto.buttonsMessage;
+        }
+        if (proto.listMessage) {
+            proto.viewOnceMessage = {
+                message: {
+                    listMessage: proto.listMessage,
+                },
+            };
+            delete proto.listMessage;
+        }
+        return proto;
+    });
 
     window.injectToFunction({
         index: 0,
@@ -253,20 +250,6 @@ exports.ExposeStore = (moduleRaidStr) => {
         property: 'typeAttributeFromProtobuf'
     }, (func, args) => {
         const [proto] = args;
-
-        if (proto.ephemeralMessage) {
-            const { message } = proto.ephemeralMessage;
-            return message ? func(message) : 'text';
-        }
-        if (proto.deviceSentMessage) {
-            const { message } = proto.deviceSentMessage;
-            return message ? func(message) : 'text';
-        }
-        if (proto.viewOnceMessage) {
-            const { message } = proto.viewOnceMessage;
-            return message ? func(message) : 'text';
-        }
-        
         if (proto.templateMessage?.hydratedTemplate) {
             const keys = Object.keys(proto.templateMessage?.hydratedTemplate);
             const messagePart = [
@@ -287,9 +270,28 @@ exports.ExposeStore = (moduleRaidStr) => {
         ) {
             return 'text';
         }
+        
+        return func(...args);
+    });
 
-        if (proto.listMessage) {
-            return 'text';
+    window.injectToFunction({
+        index: 0,
+        name: 'typeAttributeFromProtobuf',
+        property: 'typeAttributeFromProtobuf'
+    }, (func, args) => {
+        const [proto] = args;
+
+        if (proto.ephemeralMessage) {
+            const { message } = proto.ephemeralMessage;
+            return message ? func(message) : 'text';
+        }
+        if (proto.deviceSentMessage) {
+            const { message } = proto.deviceSentMessage;
+            return message ? func(message) : 'text';
+        }
+        if (proto.viewOnceMessage) {
+            const { message } = proto.viewOnceMessage;
+            return message ? func(message) : 'text';
         }
 
         return func(...args);
@@ -304,6 +306,28 @@ exports.ExposeStore = (moduleRaidStr) => {
         if (proto.templateMessage?.hydratedTemplate) {
             return func(proto.templateMessage.hydratedTemplate);
         }
+        return func(...args);
+    });
+
+    window.injectToFunction({
+        index: 0,
+        name: 'mediaTypeFromProtobuf',
+        property: 'mediaTypeFromProtobuf'
+    }, (func, args) => {
+        const [proto] = args;
+        if (proto.deviceSentMessage) {
+            const { message } = proto.deviceSentMessage;
+            return message ? func(message) : null;
+        }
+        if (proto.ephemeralMessage) {
+            const { message } = proto.ephemeralMessage;
+            return message ? func(message) : null;
+        }
+        if (proto.viewOnceMessage) {
+            const { message } = proto.viewOnceMessage;
+            return message ? func(message) : null;
+        }
+
         return func(...args);
     });
     
@@ -357,44 +381,45 @@ exports.LoadUtils = () => {
             return returnObject;
         }
         
+        if (typeof buttonsOptions.useTemplateButtons === 'undefined' || buttonsOptions.useTemplateButtons === null) {
+            buttonsOptions.useTemplateButtons = buttonsOptions.buttons.some((button) => {
+                return 'callButton' in button || 'urlButton' in button;
+            });
+        }
+        
         returnObject.title = buttonsOptions.title;
         returnObject.footer = buttonsOptions.footer;
     
         if (buttonsOptions.useTemplateButtons) {
             returnObject.isFromTemplate = true;
             returnObject.hydratedButtons = buttonsOptions.buttons;
-            returnObject.buttons = new window.Store.TemplateButtonCollection();
+            returnObject.buttons = new window.Store.TemplateButtonCollection;
 
-            returnObject.buttons.add(
-                returnObject.hydratedButtons.map((button, index) => {
-                    const i = `${null != button.index ? button.index : index}`;
-                      
-                    if (button.urlButton) {
-                        return new window.Store.TemplateButtonModel({
-                            id: i,
-                            displayText: button.urlButton?.displayText,
-                            url: button.urlButton?.url,
-                            subtype: 'url',
-                        });
-                    }
-            
-                    if (button.callButton) {
-                        return new window.Store.TemplateButtonModel({
-                            id: i,
-                            displayText: button.callButton.displayText,
-                            phoneNumber: button.callButton.phoneNumber,
-                            subtype: 'call',
-                        });
-                    }
-            
+            returnObject.buttons.add(returnObject.hydratedButtons.map((button, index) => {
+                const buttonIndex = button.index ? button.index : index;
+                if (button.urlButton) {
                     return new window.Store.TemplateButtonModel({
-                        id: i,
+                        id: buttonIndex,
+                        displayText: button.urlButton?.displayText || '',
+                        url: button.urlButton?.url,
+                        subtype: 'url'
+                    });
+                } else if (button.callButton) {
+                    return new window.Store.TemplateButtonModel({
+                        id: buttonIndex,
+                        displayText: button.callButton?.displayText,
+                        phoneNumber: button.callButton?.phoneNumber,
+                        subtype: 'call'
+                    });
+                } else {
+                    return new window.Store.TemplateButtonModel({
+                        id: buttonIndex,
                         displayText: button.quickReplyButton?.displayText,
                         selectionId: button.quickReplyButton?.id,
-                        subtype: 'quick_reply',
+                        subtype: 'quick_reply'
                     });
-                })
-            );
+                }
+            }));
         }
         else {
             returnObject.isDynamicReplyButtonsMsg = true;
